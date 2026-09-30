@@ -12,10 +12,15 @@ export function provider(name, env, base) {
 export async function identity(p, code, tx) {
   const body = new URLSearchParams({client_id: p.clientId, client_secret: p.clientSecret, code, code_verifier: tx.code_verifier, redirect_uri: p.redirectUri, grant_type: "authorization_code"});
   const response = await fetch(p.token, {method: "POST", headers: {"Accept": "application/json", "Content-Type": "application/x-www-form-urlencoded"}, body, redirect: "error", signal: AbortSignal.timeout(10000)});
-  if (!response.ok) throw new Error("identity");
   const tokens = await response.json();
-  if (tokens.error) throw new Error("identity");
-  if (p.name === "google") return validateGoogle(tokens.id_token, p.clientId, tx.nonce);
+  if (!response.ok || tokens.error) {
+    const reason = ["invalid_client", "invalid_grant", "redirect_uri_mismatch"].includes(tokens.error) ? tokens.error : "token_exchange";
+    throw new Error(reason);
+  }
+  if (p.name === "google") {
+    try { return await validateGoogle(tokens.id_token, p.clientId, tx.nonce); }
+    catch { throw new Error("google_validation"); }
+  }
   if (typeof tokens.access_token !== "string" || !tokens.access_token || typeof tokens.token_type !== "string" || tokens.token_type.toLowerCase() !== "bearer") throw new Error("identity");
   let profile;
   try {
