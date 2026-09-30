@@ -11,8 +11,14 @@ export function provider(name, env, base) {
 }
 export async function identity(p, code, tx) {
   const body = new URLSearchParams({client_id: p.clientId, client_secret: p.clientSecret, code, code_verifier: tx.code_verifier, redirect_uri: p.redirectUri, grant_type: "authorization_code"});
-  const response = await timedFetch(p.token, {method: "POST", headers: {"Accept": "application/json", "Content-Type": "application/x-www-form-urlencoded"}, body, redirect: "error"});
-  const tokens = await response.json();
+  let response;
+  try {
+    response = await timedFetch(p.token, {method: "POST", headers: {"Accept": "application/json", "Content-Type": "application/x-www-form-urlencoded"}, body: body.toString(), redirect: "error"});
+  } catch (e) { throw new Error(e?.name === "AbortError" ? "token_timeout" : "token_network"); }
+  let tokens;
+  try { tokens = await response.json(); }
+  catch { throw new Error("token_response"); }
+  if (!tokens || typeof tokens !== "object") throw new Error("token_response");
   if (!response.ok || tokens.error) {
     const reason = ["invalid_client", "invalid_grant", "redirect_uri_mismatch"].includes(tokens.error) ? tokens.error : "token_exchange";
     throw new Error(reason);
