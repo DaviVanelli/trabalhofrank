@@ -34,5 +34,9 @@ export async function onRequest(context) {
     await env.DB.batch(statements);
     const h = headers(); h.set("Location",origin); h.append("Set-Cookie",cookie(TX,"",0,"Lax")); h.append("Set-Cookie",cookie(SESSION,session,28800,"Strict"));
     return new Response(null,{status:302,headers:h});
-  } catch {return reject(502, "Falha na etapa: " + stage + ".");}
+  } catch (e) {
+    const details = {invalid_client: "Google recusou as credenciais do cliente.", invalid_grant: "Provedor recusou o código ou PKCE.", redirect_uri_mismatch: "Endereço de retorno divergente.", token_exchange: "Provedor recusou a troca do código.", google_validation: "Falha na validação criptográfica ou nos dados do ID token Google."};
+    const detail = Object.prototype.hasOwnProperty.call(details, e?.message) ? details[e.message] : "Falha na etapa: " + stage + ".";
+    return reject(502, detail);
+  }
 }
