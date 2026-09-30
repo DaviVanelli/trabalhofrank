@@ -1,6 +1,6 @@
 import {decode, equal} from "./crypto.js";
 async function json(url) {
-  const response = await fetch(url, {redirect: "error", signal: AbortSignal.timeout(10000)});
+  const response = await timedFetch(url, {redirect: "error"});
   if (!response.ok) throw new Error("identity");
   return response.json();
 }
@@ -27,4 +27,11 @@ export async function validateGoogle(token, clientId, nonce) {
       !Number.isInteger(claims.exp) || claims.exp <= now || !Number.isInteger(claims.iat) || claims.iat > now + 60 || claims.iat >= claims.exp ||
       !equal(claims.nonce, nonce) || typeof claims.sub !== "string" || !claims.sub) throw new Error("identity");
   return {issuer: "https://accounts.google.com", subject: claims.sub, email: claims.email_verified === true && typeof claims.email === "string" ? claims.email : null, displayName: typeof claims.name === "string" ? claims.name : "Usuário Google"};
+}
+
+async function timedFetch(url, options = {}) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 10000);
+  try { return await fetch(url, {...options, signal: controller.signal}); }
+  finally { clearTimeout(timer); }
 }
