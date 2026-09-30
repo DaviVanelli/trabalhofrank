@@ -11,7 +11,7 @@ export function provider(name, env, base) {
 }
 export async function identity(p, code, tx) {
   const body = new URLSearchParams({client_id: p.clientId, client_secret: p.clientSecret, code, code_verifier: tx.code_verifier, redirect_uri: p.redirectUri, grant_type: "authorization_code"});
-  const response = await fetch(p.token, {method: "POST", headers: {"Accept": "application/json", "Content-Type": "application/x-www-form-urlencoded"}, body, redirect: "error", signal: AbortSignal.timeout(10000)});
+  const response = await timedFetch(p.token, {method: "POST", headers: {"Accept": "application/json", "Content-Type": "application/x-www-form-urlencoded"}, body, redirect: "error"});
   const tokens = await response.json();
   if (!response.ok || tokens.error) {
     const reason = ["invalid_client", "invalid_grant", "redirect_uri_mismatch"].includes(tokens.error) ? tokens.error : "token_exchange";
@@ -24,21 +24,28 @@ export async function identity(p, code, tx) {
   if (typeof tokens.access_token !== "string" || !tokens.access_token || typeof tokens.token_type !== "string" || tokens.token_type.toLowerCase() !== "bearer") throw new Error("identity");
   let profile;
   try {
-    const userResponse = await fetch("https://api.github.com/user", {headers: {
+    const userResponse = await timedFetch("https://api.github.com/user", {headers: {
       Authorization: "Bearer " + tokens.access_token, Accept: "application/vnd.github+json",
       "X-GitHub-Api-Version": "2026-03-10", "User-Agent": "trabalhofrank-oauth-lab"
-    }, redirect: "error", signal: AbortSignal.timeout(10000)});
+    }, redirect: "error"});
     if (userResponse.status !== 200) throw new Error("identity");
     profile = await userResponse.json();
     if (!Number.isSafeInteger(profile.id) || profile.id <= 0) throw new Error("identity");
   } finally {
-    const revoke = await fetch("https://api.github.com/applications/" + encodeURIComponent(p.clientId) + "/grant", {
+    const revoke = await timedFetch("https://api.github.com/applications/" + encodeURIComponent(p.clientId) + "/grant", {
       method: "DELETE", headers: {Authorization: "Basic " + btoa(p.clientId + ":" + p.clientSecret),
         Accept: "application/vnd.github+json", "Content-Type": "application/json",
         "X-GitHub-Api-Version": "2026-03-10", "User-Agent": "trabalhofrank-oauth-lab"},
-      body: JSON.stringify({access_token: tokens.access_token}), redirect: "error", signal: AbortSignal.timeout(10000)
+      body: JSON.stringify({access_token: tokens.access_token}), redirect: "error"
     });
     if (revoke.status !== 204) throw new Error("identity");
   }
   return {issuer: "https://github.com", subject: String(profile.id), email: typeof profile.email === "string" ? profile.email : null, displayName: profile.name || profile.login || "Usuário GitHub"};
+}
+
+async function timedFetch(url, options = {}) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 10000);
+  try { return await fetch(url, {...options, signal: controller.signal}); }
+  finally { clearTimeout(timer); }
 }
