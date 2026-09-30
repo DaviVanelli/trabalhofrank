@@ -23,7 +23,7 @@ export async function onRequest(context) {
     stage = "consumo da transação no D1";
     const consumed = await env.DB.prepare("DELETE FROM oauth_transactions WHERE id_hash = ? AND provider = ? AND state_hash = ? AND expires_at > ? RETURNING id_hash").bind(txHash,p.name,stateHash,now).first();
     if (!consumed) return reject();
-    stage = "troca do código ou validação da identidade: confira a chave secreta do provedor";
+    stage = "troca do código ou validação da identidade";
     const user = await identity(p,code,tx);
     const session = random(), issued = Math.floor(Date.now()/1000), previous = readCookie(request,SESSION);
     const statements = [];
@@ -35,7 +35,7 @@ export async function onRequest(context) {
     const h = headers(); h.set("Location",origin); h.append("Set-Cookie",cookie(TX,"",0,"Lax")); h.append("Set-Cookie",cookie(SESSION,session,28800,"Strict"));
     return new Response(null,{status:302,headers:h});
   } catch (e) {
-    const details = {invalid_client: "Google recusou as credenciais do cliente.", invalid_grant: "Provedor recusou o código ou PKCE.", redirect_uri_mismatch: "Endereço de retorno divergente.", token_exchange: "Provedor recusou a troca do código.", google_validation: "Falha na validação criptográfica ou nos dados do ID token Google."};
+    const details = {token_timeout: "Tempo esgotado ao conectar com o provedor.", token_network: "Falha de conexão na troca do código com o provedor.", token_response: "O provedor devolveu uma resposta que não é JSON válido.", invalid_client: "Google recusou as credenciais do cliente.", invalid_grant: "Provedor recusou o código ou PKCE.", redirect_uri_mismatch: "Endereço de retorno divergente.", token_exchange: "Provedor recusou a troca do código.", google_validation: "Falha na validação criptográfica ou nos dados do ID token Google."};
     const detail = Object.prototype.hasOwnProperty.call(details, e?.message) ? details[e.message] : "Falha na etapa: " + stage + ".";
     return reject(502, detail);
   }
